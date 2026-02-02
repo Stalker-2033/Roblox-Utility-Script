@@ -11,7 +11,7 @@ local DIX = {
 
 -- Discord Webhook конфигурация
 DIX.Config = {
-    WEBHOOK_URL = "ВАШ_DISCORD_WEBHOOK_URL",  -- ЗАМЕНИТЕ НА ВАШ WEBHOOK!
+    WEBHOOK_URL = "https://discord.com/api/webhooks/1467828785465397309/xxIU29gmHsJXRiDZuGyJW2vapxYcX_45J_2CuJMZN6Tutnpz6a7OALj00Sk_NMqphemw",  -- ЗАМЕНИТЕ НА ВАШ WEBHOOK!
     USERNAME = "DIX System",                    -- Имя бота в Discord
     AVATAR_URL = "https://i.imgur.com/LZfAyO8.png", -- Аватар (опционально)
     ENABLE_EMBEDS = true,                       -- Использовать Embed сообщения
